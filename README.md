@@ -9,6 +9,8 @@ Sowohl **Duell‑Vergleiche** zweier Begriffe als auch **Deep‑Dive‑Analysen*
 
 <strong>Ziel:</strong> Die öffentliche Aufmerksamkeit gegenüber Klimathemen über die Zeit sichtbar machen.
 
+<strong>Projekt-Url:</strong> https://web-app-server.de/youtube-klima-monitoring/
+
 <h2>Features</h2>
 
 <h3>Daten-Erfassung (ETL)</h3>
