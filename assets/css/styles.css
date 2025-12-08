@@ -1,0 +1,414 @@
+:root {
+    --bg: Canvas;
+    --fg: CanvasText;
+    --muted: #8b8b8b;
+    --card: color-mix(in oklab, var(--bg), var(--fg) 5%);
+    --accent: #4f7cff;
+    --accent-2: #00b894;
+    --border: color-mix(in oklab, var(--fg), var(--bg) 85%);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 6px 20px rgba(0, 0, 0, .06);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+    box-sizing: border-box
+}
+
+html, body {
+    height: 100%
+}
+
+body {
+    margin: 0;
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell;
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.site-header, .site-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .8rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+}
+
+.site-footer {
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: .6rem
+}
+
+.brand svg {
+    width: 22px;
+    height: 22px;
+    fill: var(--accent)
+}
+
+.brand img {
+    width: 200px;
+    height: auto;
+}
+
+.brand h1 {
+    font-size: 1.05rem;
+    margin: 0
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem
+}
+
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .8rem;
+    align-items: flex-end;
+    margin: .5rem 0 1rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    min-width: 160px
+}
+
+label {
+    font-size: .85rem;
+    color: var(--muted)
+}
+
+select {
+    padding: .55rem .6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--fg)
+}
+
+.btn {
+    padding: .6rem .9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    cursor: pointer
+}
+
+.btn.primary {
+    background: var(--accent);
+    color: white;
+    border-color: transparent
+}
+
+.btn:disabled {
+    opacity: .6;
+    cursor: not-allowed
+}
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    box-shadow: var(--shadow)
+}
+
+.kpi-label {
+    font-size: .85rem;
+    color: var(--muted)
+}
+
+.kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-top: .2rem
+}
+
+.kpi-sub {
+    font-size: .8rem;
+    color: var(--muted)
+}
+
+.tabs {
+    display: flex;
+    gap: .4rem;
+    border-bottom: 1px solid var(--border);
+    margin: 1rem 0
+}
+
+.tab {
+    background: none;
+    border: none;
+    padding: .7rem 1rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent
+}
+
+.tab[aria-selected="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600
+}
+
+.panel {
+    display: none;
+    padding-block: 1rem
+}
+
+.panel.is-active {
+    display: block
+}
+
+.panel-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow)
+}
+
+.card header {
+    padding: .8rem 1rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border)
+}
+
+.card canvas, .card .table-wrap, .card .events, .card .tokens {
+    padding: .8rem 1rem
+}
+
+.table-wrap {
+    overflow: auto
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse
+}
+
+.table th, .table td {
+    padding: .5rem .6rem;
+    border-bottom: 1px solid var(--border);
+    text-align: right
+}
+
+.table th:first-child, .table td:first-child {
+    text-align: left
+}
+
+.table tr:hover {
+    background: color-mix(in oklab, var(--card), var(--fg) 6%)
+}
+
+.events {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem
+}
+
+.events li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .5rem .6rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm)
+}
+
+.tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: 0
+}
+
+.tokens li {
+    padding: .35rem .6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: .85rem
+}
+
+.toast {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    padding: .6rem .9rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 10px;
+    box-shadow: var(--shadow)
+}
+
+.empty {
+    padding: 1rem;
+    color: var(--muted)
+}
+
+.skeleton {
+    display: none;
+    height: 220px;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--fg), var(--bg) 88%), transparent);
+    border-radius: var(--radius);
+    margin: 1rem
+}
+
+.skeleton.is-loading {
+    display: block
+}
+
+@media (max-width: 980px) {
+    .kpis {
+        grid-template-columns: repeat(2, 1fr)
+    }
+
+    .panel-grid {
+        grid-template-columns: 1fr
+    }
+}
+
+@media (max-width: 520px) {
+    .kpis {
+        grid-template-columns: 1fr
+    }
+}
+
+/* Theme overrides for YouTube Klima Monitoring */
+:root {
+    --bg: #0fa3a4;
+    --fg: #111827;
+    --muted: #6b7280;
+    --card: #ffffff;
+    --accent: #ff5b5b;
+    --accent-2: #20c997;
+    --border: rgba(15, 23, 42, 0.08);
+    --shadow: 0 18px 45px rgba(15, 163, 164, 0.35);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.dark-theme {
+    --bg: #020617;
+    --fg: #e5e7eb;
+    --muted: #9ca3af;
+    --card: #0b1120;
+    --accent: #ff8ba0;
+    --accent-2: #38e8b5;
+    --border: rgba(148, 163, 184, 0.35);
+    --shadow: 0 18px 45px rgba(0, 0, 0, 0.7);
+}
+
+body {
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.card {
+    border-radius: 0.75rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+.chart-box {
+    position: relative;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    aspect-ratio: 16/6;
+}
+
+.chart-box canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.ykm-navbar {
+    background: linear-gradient(90deg, #0fa3a4, #0b8690);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+.dark-theme .ykm-navbar {
+    background: linear-gradient(90deg, #020617, #0f172a);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.7);
+}
+
+.ykm-navbar .navbar-brand {
+    color: #fff;
+    font-weight: 600;
+}
+
+.ykm-navbar .navbar-logo {
+    height: 60px;
+    width: auto;
+}
+
+/* Sortierbare Tabellen-Header – Icons & Hover */
+th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    position: relative;
+    padding-right: 1.5rem;
+    transition: background-color 0.15s ease;
+}
+
+th[data-sort]::after {
+    content: "⇅";
+    position: absolute;
+    right: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    opacity: 0.35;
+}
+
+th[data-sort].sorted-asc::after {
+    content: "▲";
+    opacity: 0.7;
+}
+
+th[data-sort].sorted-desc::after {
+    content: "▼";
+    opacity: 0.7;
+}
+
+th[data-sort]:hover {
+    background-color: rgba(148, 163, 184, 0.15);
+}
+
+.dark-theme th[data-sort]:hover {
+    background-color: rgba(148, 163, 184, 0.25);
+}
