@@ -1,41 +1,60 @@
-// Maximum device pixel ratio (HiDPI cap)
+/* =========================================================================
+   YouTube Klima Monitoring – app.js
+   - Steuert UI (Filter, Dark Mode, Modal)
+   - Lädt Daten via PHP-Endpunkte (queries.php, table.php, series_*.php)
+   - Zeichnet Charts (Chart.js) und befüllt die Tabelle
+   ========================================================================= */
+
+// HiDPI/Retina: wir begrenzen die Pixel-Dichte, damit das Canvas nicht zu groß wird
 const DPR_CAP = Math.min(window.devicePixelRatio || 1, 2);
 const MAX_CANVAS_PX = 4096;
 
-let chart = null;
-let videoModal = null;
-let currentRows = [];
+// Globale Zustände
+let chart = null; // Chart.js Instanz
+let videoModal = null; // Bootstrap Modal Instanz
+let currentRows = []; // aktuell angezeigte Tabellen-Zeilen (für Sortierung)
 let sortState = {
 	key: 'views',
 	dir: 'desc'
-};
-const THEME_KEY = 'ykm-theme';
+}; // aktuelle Sortierung
+const THEME_KEY = 'ykm-theme'; // LocalStorage-Key für Dark Mode
 
-// DOM elements
-const modeEl = document.getElementById('mode');
-const viewModeEl = document.getElementById('viewMode');
-const daysEl = document.getElementById('days');
-const metricEl = document.getElementById('metric');
-const qaEl = document.getElementById('qa');
-const qbEl = document.getElementById('qb');
-const qbWrap = document.getElementById('qbWrap');
-const metricWrap = document.getElementById('metricWrap');
-const reloadBtn = document.getElementById('reload');
-const tblTerm = document.getElementById('tblTerm');
-const tbody = document.getElementById('tbody');
-const chartTitleEl = document.getElementById('chartTitle');
-const chartSubtitleEl = document.getElementById('chartSubtitle');
+// -------------------------------------------------------------------------
+// DOM-Elemente (UI-Controls)
+// -------------------------------------------------------------------------
+const modeEl = document.getElementById('mode'); // Duel / Deep
+const viewModeEl = document.getElementById('viewMode'); // trend / top
+const daysEl = document.getElementById('days'); // 7/14/30
+const metricEl = document.getElementById('metric'); // Views/Likes/Kommentare (nur Duel)
+const qaEl = document.getElementById('qa'); // Begriff A
+const qbEl = document.getElementById('qb'); // Begriff B
+const qbWrap = document.getElementById('qbWrap'); // Wrapper zum Ein-/Ausblenden von Begriff B
+const metricWrap = document.getElementById('metricWrap'); // Wrapper zum Ein-/Ausblenden der Metrik
+const reloadBtn = document.getElementById('reload'); // Anzeigen-Button
+const tblTerm = document.getElementById('tblTerm'); // Anzeige des aktuellen Begriffs in der Tabellen-Überschrift
+const tbody = document.getElementById('tbody'); // Tabellen-Body
+const chartTitleEl = document.getElementById('chartTitle'); // dynamischer Chart-Titel
+const chartSubtitleEl = document.getElementById('chartSubtitle'); // dynamischer Chart-Untertitel
 
-// THEME HANDLING
+// =========================================================================
+// 1) THEME (Dark Mode)
+// =========================================================================
+
+/**
+ * Setzt das Theme, indem eine CSS-Klasse auf <html> gesetzt/entfernt wird.
+ */
 function applyTheme(theme) {
 	const root = document.documentElement;
-	if (theme === 'dark') {
-		root.classList.add('dark-theme');
-	} else {
-		root.classList.remove('dark-theme');
-	}
+	if (theme === 'dark') root.classList.add('dark-theme');
+	else root.classList.remove('dark-theme');
 }
 
+/**
+ * Initialisiert den Dark-Mode-Button:
+ * - lädt Zustand aus LocalStorage
+ * - setzt Button-Label
+ * - toggelt bei Klick
+ */
 function initThemeToggle() {
 	const stored = localStorage.getItem(THEME_KEY) || 'light';
 	applyTheme(stored);
@@ -57,30 +76,39 @@ function initThemeToggle() {
 	});
 }
 
-// MODAL HANDLING
+// =========================================================================
+// 2) MODAL (Video-Detailansicht)
+// =========================================================================
+
+/**
+ * Erstellt die Bootstrap-Modal-Instanz (falls Bootstrap verfügbar ist).
+ */
 function initVideoModal() {
 	const el = document.getElementById('videoModal');
 	if (!el || !window.bootstrap) return;
 	videoModal = new bootstrap.Modal(el);
 }
 
+/**
+ * Öffnet das Modal basierend auf den data-* Attributen einer Tabellenzeile.
+ */
 function openVideoModalFromRow(tr) {
-	if (!videoModal) {
-		initVideoModal();
-	}
+	if (!videoModal) initVideoModal();
 	if (!videoModal) return;
 
 	const id = tr.dataset.videoId;
 	if (!id) return;
 
+	// Werte aus data-* ziehen und hübsch formatieren
 	const title = tr.dataset.title || '';
 	const views = tr.dataset.views ? Number(tr.dataset.views).toLocaleString('de-DE') : '–';
 	const likes = tr.dataset.likes ? Number(tr.dataset.likes).toLocaleString('de-DE') : '–';
 	const comments = tr.dataset.comments ? Number(tr.dataset.comments).toLocaleString('de-DE') : '–';
 	const publishedAt = tr.dataset.publishedAt ? tr.dataset.publishedAt.replace('T', ' ').substring(0, 16) : '';
 	const lang = tr.dataset.language || '–';
-	const term = qaEl && qaEl.options[qaEl.selectedIndex] ? qaEl.options[qaEl.selectedIndex].text : '';
+	const term = qaEl?.options[qaEl.selectedIndex]?.text || '';
 
+	// Elemente im Modal füllen
 	const titleEl = document.getElementById('videoModalLabel');
 	const frameEl = document.getElementById('videoModalFrame');
 	const termEl = document.getElementById('videoModalTerm');
@@ -98,26 +126,41 @@ function openVideoModalFromRow(tr) {
 	if (viewsEl) viewsEl.textContent = views;
 	if (likesEl) likesEl.textContent = likes;
 	if (commentsEl) commentsEl.textContent = comments;
+
+	// Link und Embed setzen
 	if (linkEl) linkEl.href = `https://www.youtube.com/watch?v=${id}`;
 	if (frameEl) frameEl.src = `https://www.youtube.com/embed/${id}`;
 
 	videoModal.show();
 }
 
-// CHART HELPERS
+// =========================================================================
+// 3) CHART (Chart.js) – erstellen/zerstören
+// =========================================================================
+
+/**
+ * Löscht eine vorhandene Chart.js Instanz zuverlässig,
+ * damit sich nicht mehrere Charts „stapeln“.
+ */
 function destroyChart() {
 	const canvas = document.getElementById('chart');
 	if (!canvas) return;
+
 	const existing = Chart.getChart ? Chart.getChart(canvas) : null;
 	if (existing) existing.destroy();
 	chart = null;
 }
 
+/**
+ * Zeichnet einen Line-Chart (Zeitverlauf).
+ */
 function buildChart(data) {
 	destroyChart();
+
 	const canvas = document.getElementById('chart');
 	if (!canvas) return;
 
+	// Canvas-Größe begrenzen (wichtig gegen „Canvas exceeds max size“)
 	const box = canvas.parentElement;
 	const w = Math.round(box.clientWidth);
 	const h = Math.round(box.clientHeight);
@@ -126,6 +169,7 @@ function buildChart(data) {
 	if (canvas.width !== physW) canvas.width = physW;
 	if (canvas.height !== physH) canvas.height = physH;
 
+	// Farben (Logo-nah): Duel = 2 Linien, Deep = 3 Linien
 	const duelPalette = [{
 			border: 'rgba(12,163,164,1)',
 			fill: 'rgba(12,163,164,0.18)'
@@ -148,9 +192,11 @@ function buildChart(data) {
 			fill: 'rgba(255,175,63,0.22)'
 		}
 	];
-	const palette = data.datasets.length === 2 ? duelPalette :
+	const palette =
+		data.datasets.length === 2 ? duelPalette :
 		data.datasets.length === 3 ? deepPalette : duelPalette;
 
+	// Datasets dekorieren (Farben, Punkte)
 	const decorated = data.datasets.map((ds, idx) => ({
 		...ds,
 		borderColor: palette[idx % palette.length].border,
@@ -185,8 +231,12 @@ function buildChart(data) {
 	});
 }
 
+/**
+ * Zeichnet einen horizontalen Bar-Chart (Top-Videos).
+ */
 function buildTopChart(data) {
 	destroyChart();
+
 	const canvas = document.getElementById('chart');
 	if (!canvas) return;
 
@@ -225,7 +275,45 @@ function buildTopChart(data) {
 	});
 }
 
-// CHART TITLE
+// =========================================================================
+// 4) UI-LOGIK: Welche Controls sind sichtbar/aktiv?
+// =========================================================================
+
+/**
+ * Logik:
+ * - Ansicht "Top-Videos": nur Begriff A, kein B, keine Metrik, Modus ist irrelevant → deaktivieren
+ * - Ansicht "Zeitverlauf": Modus ist relevant:
+ *    - Duel: zeigt B + Metrik
+ *    - Deep-Dive: versteckt B + Metrik
+ */
+function updateControlVisibility() {
+	const viewMode = viewModeEl?.value || 'trend';
+	const duel = modeEl?.value === 'duel';
+
+	if (viewMode === 'top') {
+		// Top-Videos: wir arbeiten nur mit Begriff A (Ranking nach Views)
+		if (modeEl) {
+			// wir setzen einen konsistenten Wert und sperren das Feld
+			modeEl.value = 'deep';
+			modeEl.disabled = true;
+		}
+		if (qbWrap) qbWrap.style.display = 'none';
+		if (metricWrap) metricWrap.style.display = 'none';
+	} else {
+		// Zeitverlauf
+		if (modeEl) modeEl.disabled = false;
+		if (qbWrap) qbWrap.style.display = duel ? '' : 'none';
+		if (metricWrap) metricWrap.style.display = duel ? '' : 'none';
+	}
+}
+
+// =========================================================================
+// 5) Dynamischer Chart-Titel / Untertitel
+// =========================================================================
+
+/**
+ * Setzt Titel + Untertitel je nach Modus und Auswahl.
+ */
 function updateChartTitle(viewMode, duel, metric, qaText, qbText, days) {
 	if (!chartTitleEl || !chartSubtitleEl) return;
 
@@ -234,6 +322,7 @@ function updateChartTitle(viewMode, duel, metric, qaText, qbText, days) {
 		like_count: 'Likes',
 		comment_count: 'Kommentare'
 	};
+
 	const metricLabel = metricLabels[metric] || 'Views';
 	const daysLabel = `letzte ${days} Tage`;
 
@@ -250,7 +339,13 @@ function updateChartTitle(viewMode, duel, metric, qaText, qbText, days) {
 	}
 }
 
-// TABLE SORTING & RENDERING
+// =========================================================================
+// 6) Tabelle: Sortierung + Rendern + Badges + Header-Indikatoren
+// =========================================================================
+
+/**
+ * Sortiert Zeilen je nach sortState.
+ */
 function sortRows(rows) {
 	const {
 		key,
@@ -260,104 +355,23 @@ function sortRows(rows) {
 	const sorted = [...rows];
 
 	sorted.sort((a, b) => {
-		if (key === 'views') {
-			const av = Number(a.view_count || 0);
-			const bv = Number(b.view_count || 0);
-			return (av - bv) * factor;
-		}
-		if (key === 'likes') {
-			const av = Number(a.like_count || 0);
-			const bv = Number(b.like_count || 0);
-			return (av - bv) * factor;
-		}
-		if (key === 'comments') {
-			const av = Number(a.comment_count || 0);
-			const bv = Number(b.comment_count || 0);
-			return (av - bv) * factor;
-		}
-		if (key === 'date') {
-			const ad = a.published_at || '';
-			const bd = b.published_at || '';
-			return ad.localeCompare(bd) * factor;
-		}
-		if (key === 'title') {
-			const at = (a.title || '').toLowerCase();
-			const bt = (b.title || '').toLowerCase();
-			return at.localeCompare(bt) * factor;
-		}
-		if (key === 'lang') {
-			const al = (a.language || '').toLowerCase();
-			const bl = (b.language || '').toLowerCase();
-			return al.localeCompare(bl) * factor;
-		}
-		// default: sort by views
-		const av = Number(a.view_count || 0);
-		const bv = Number(b.view_count || 0);
-		return (av - bv) * factor;
+		if (key === 'views') return (Number(a.view_count || 0) - Number(b.view_count || 0)) * factor;
+		if (key === 'likes') return (Number(a.like_count || 0) - Number(b.like_count || 0)) * factor;
+		if (key === 'comments') return (Number(a.comment_count || 0) - Number(b.comment_count || 0)) * factor;
+		if (key === 'date') return String(a.published_at || '').localeCompare(String(b.published_at || '')) * factor;
+		if (key === 'title') return String(a.title || '').toLowerCase().localeCompare(String(b.title || '').toLowerCase()) * factor;
+		if (key === 'lang') return String(a.language || '').toLowerCase().localeCompare(String(b.language || '').toLowerCase()) * factor;
+
+		// Fallback: Views
+		return (Number(a.view_count || 0) - Number(b.view_count || 0)) * factor;
 	});
 
 	return sorted;
 }
 
-function renderTable(rows) {
-	if (!tbody) return;
-	currentRows = rows.slice();
-	const sorted = sortRows(currentRows);
-
-	tbody.innerHTML = '';
-	sorted.forEach((row, idx) => {
-		const tr = document.createElement('tr');
-		const rank = idx + 1;
-
-		// Rang-Badge: immer "Top {Rang}", Farbe nach Range
-		let badgeLabel = `Top ${rank}`;
-		let badgeClass = 'badge bg-secondary-subtle text-secondary-emphasis';
-		if (rank === 1) {
-			badgeClass = 'badge bg-danger';
-		} else if (rank <= 3) {
-			badgeClass = 'badge bg-warning';
-		} else if (rank <= 10) {
-			badgeClass = 'badge bg-success';
-		}
-
-		tr.dataset.videoId = row.video_id;
-		tr.dataset.title = row.title;
-		tr.dataset.views = row.view_count ?? '';
-		tr.dataset.likes = row.like_count ?? '';
-		tr.dataset.comments = row.comment_count ?? '';
-		tr.dataset.publishedAt = row.published_at || '';
-		tr.dataset.language = row.language || '';
-
-		const youtubeUrl = row.video_id ?
-			`https://www.youtube.com/watch?v=${row.video_id}` :
-			'#';
-
-		tr.innerHTML = `
-	  <td><span class="${badgeClass}">${badgeLabel}</span></td>
-	  <td><a href="${youtubeUrl}" class="text-decoration-none">${row.title}</a></td>
-	  <td>${row.view_count == null ? '–' : Number(row.view_count).toLocaleString('de-DE')}</td>
-	  <td>${row.like_count == null ? '–' : Number(row.like_count).toLocaleString('de-DE')}</td>
-	  <td>${row.comment_count == null ? '–' : Number(row.comment_count).toLocaleString('de-DE')}</td>
-	  <td>${row.published_at ? row.published_at.replace('T', ' ').substring(0, 16) : ''}</td>
-	  <td>${row.language || '–'}</td>
-	`;
-		tbody.appendChild(tr);
-	});
-
-	if (!tbody.dataset.bound) {
-		tbody.addEventListener('click', (ev) => {
-			const tr = ev.target.closest('tr[data-video-id]');
-			if (!tr) return;
-			ev.preventDefault();
-			openVideoModalFromRow(tr);
-		});
-		tbody.dataset.bound = '1';
-	}
-
-	// Icons im Header aktualisieren
-	updateSortIndicators();
-}
-
+/**
+ * Markiert im Tabellenkopf die aktuell sortierte Spalte (CSS übernimmt Pfeile/Icons).
+ */
 function updateSortIndicators() {
 	const headers = document.querySelectorAll('th[data-sort]');
 	headers.forEach((th) => {
@@ -368,6 +382,77 @@ function updateSortIndicators() {
 	});
 }
 
+/**
+ * Rendert Tabelle:
+ * - sortiert Daten
+ * - erstellt Badges "Top 1, Top 2, ..."
+ * - speichert data-* fürs Modal
+ */
+function renderTable(rows) {
+	if (!tbody) return;
+
+	// wir merken uns die aktuellen Zeilen, damit wir bei Sortierung nicht neu fetchen müssen
+	currentRows = rows.slice();
+
+	// sortiert anzeigen
+	const sorted = sortRows(currentRows);
+
+	tbody.innerHTML = '';
+
+	sorted.forEach((row, idx) => {
+		const tr = document.createElement('tr');
+		const rank = idx + 1;
+
+		// Badge: immer "Top X" passend zur aktuellen Sortierung
+		let badgeLabel = `Top ${rank}`;
+		let badgeClass = 'badge bg-secondary-subtle text-secondary-emphasis';
+		if (rank === 1) badgeClass = 'badge bg-danger';
+		else if (rank <= 3) badgeClass = 'badge bg-warning';
+		else if (rank <= 10) badgeClass = 'badge bg-success';
+
+		// Daten fürs Modal speichern
+		tr.dataset.videoId = row.video_id;
+		tr.dataset.title = row.title;
+		tr.dataset.views = row.view_count ?? '';
+		tr.dataset.likes = row.like_count ?? '';
+		tr.dataset.comments = row.comment_count ?? '';
+		tr.dataset.publishedAt = row.published_at || '';
+		tr.dataset.language = row.language || '';
+
+		const youtubeUrl = row.video_id ? `https://www.youtube.com/watch?v=${row.video_id}` : '#';
+
+		tr.innerHTML = `
+	  <td><span class="${badgeClass}">${badgeLabel}</span></td>
+	  <td><a href="${youtubeUrl}" class="text-decoration-none">${row.title}</a></td>
+	  <td>${row.view_count == null ? '–' : Number(row.view_count).toLocaleString('de-DE')}</td>
+	  <td>${row.like_count == null ? '–' : Number(row.like_count).toLocaleString('de-DE')}</td>
+	  <td>${row.comment_count == null ? '–' : Number(row.comment_count).toLocaleString('de-DE')}</td>
+	  <td>${row.published_at ? row.published_at.replace('T', ' ').substring(0, 16) : ''}</td>
+	  <td>${row.language || '–'}</td>
+	`;
+
+		tbody.appendChild(tr);
+	});
+
+	// Nur einmal einen Klick-Listener auf das tbody hängen (Event-Delegation)
+	if (!tbody.dataset.bound) {
+		tbody.addEventListener('click', (ev) => {
+			const tr = ev.target.closest('tr[data-video-id]');
+			if (!tr) return;
+			ev.preventDefault();
+			openVideoModalFromRow(tr);
+		});
+		tbody.dataset.bound = '1';
+	}
+
+	updateSortIndicators();
+}
+
+/**
+ * Klickbare Sortierung im Tabellenkopf:
+ * - Klick auf gleiche Spalte: Richtung wechseln
+ * - Klick auf neue Spalte: Standardrichtung setzen
+ */
 function initTableSorting() {
 	const headers = document.querySelectorAll('th[data-sort]');
 	headers.forEach((th) => {
@@ -382,12 +467,19 @@ function initTableSorting() {
 				sortState.dir = (key === 'title' || key === 'lang' || key === 'date') ? 'asc' : 'desc';
 			}
 
+			// Tabelle neu rendern (Sortierung wirkt sofort)
 			renderTable(currentRows);
 		});
 	});
 }
 
-// DATA LOADING
+// =========================================================================
+// 7) Daten laden: Suchbegriffe (queries.php)
+// =========================================================================
+
+/**
+ * Lädt Suchbegriffe aus queries.php und füllt die Dropdowns.
+ */
 async function loadQueries() {
 	const res = await fetch('queries.php');
 	const queries = await res.json();
@@ -395,7 +487,7 @@ async function loadQueries() {
 	qaEl.innerHTML = '';
 	qbEl.innerHTML = '';
 
-	queries.forEach((q, idx) => {
+	queries.forEach((q) => {
 		const optA = document.createElement('option');
 		optA.value = q.id;
 		optA.textContent = q.term;
@@ -407,29 +499,35 @@ async function loadQueries() {
 		qbEl.appendChild(optB);
 	});
 
-	if (qaEl.options.length > 0) {
-		qaEl.selectedIndex = 0;
-	}
-	if (qbEl.options.length > 1) {
-		qbEl.selectedIndex = 1;
-	} else if (qbEl.options.length > 0) {
-		qbEl.selectedIndex = 0;
-	}
+	if (qaEl.options.length > 0) qaEl.selectedIndex = 0;
+	if (qbEl.options.length > 1) qbEl.selectedIndex = 1;
+	else if (qbEl.options.length > 0) qbEl.selectedIndex = 0;
 
 	if (tblTerm && qaEl.options.length > 0) {
 		tblTerm.textContent = qaEl.options[qaEl.selectedIndex].text;
 	}
 }
 
-// MAIN REFRESH
+// =========================================================================
+// 8) Hauptfunktion: refresh()
+// =========================================================================
+
+/**
+ * refresh() macht:
+ * 1) UI-Controls passend ein-/ausblenden
+ * 2) Chartdaten holen (Trend oder Top)
+ * 3) Tabelle holen (Trend: alle; Top: nur Top-10)
+ * 4) Alles rendern
+ */
 async function refresh() {
 	if (!qaEl || qaEl.value === '') return;
 
-	const duel = modeEl.value === 'duel';
-	const viewMode = viewModeEl ? (viewModeEl.value || 'trend') : 'trend';
+	// Wichtig: zuerst UI-Zustand setzen, damit danach korrekt gelesen wird
+	updateControlVisibility();
 
-	if (qbWrap) qbWrap.style.display = duel ? '' : 'none';
-	if (metricWrap) metricWrap.style.display = duel ? '' : 'none';
+	// Zustand nach möglichen Auto-Anpassungen erneut lesen
+	const duel = modeEl?.value === 'duel';
+	const viewMode = viewModeEl?.value || 'trend';
 
 	const days = daysEl.value;
 	const qa = qaEl.value;
@@ -439,22 +537,35 @@ async function refresh() {
 	const qaText = qaEl.options[qaEl.selectedIndex].text;
 	const qbText = qbEl.options[qbEl.selectedIndex] ? qbEl.options[qbEl.selectedIndex].text : '';
 
+	// Titel anpassen
 	updateChartTitle(viewMode, duel, metric, qaText, qbText, days);
 
 	let rows = [];
 
+	// -------------------- Trend / Zeitverlauf --------------------
 	if (viewMode === 'trend') {
 		let seriesData;
+
+		// Duel: zwei Begriffe + eine Metrik
 		if (duel) {
-			const url = `series_compare.php?query_id_a=${encodeURIComponent(qa)}&query_id_b=${encodeURIComponent(qb)}&metric=${encodeURIComponent(metric)}&days=${encodeURIComponent(days)}`;
+			const url =
+				`series_compare.php?query_id_a=${encodeURIComponent(qa)}` +
+				`&query_id_b=${encodeURIComponent(qb)}` +
+				`&metric=${encodeURIComponent(metric)}` +
+				`&days=${encodeURIComponent(days)}`;
+
 			const res = await fetch(url);
 			const js = await res.json();
 
+			// Datumsliste zusammenführen (damit A und B auf gleicher X-Achse liegen)
 			const labels = Array.from(new Set([...js.a.map(r => r.d), ...js.b.map(r => r.d)])).sort();
+
+			// Map bauen (Datum -> Wert)
 			const mapA = {};
 			js.a.forEach(r => {
 				mapA[r.d] = Number(r.val) || 0;
 			});
+
 			const mapB = {};
 			js.b.forEach(r => {
 				mapB[r.d] = Number(r.val) || 0;
@@ -474,7 +585,9 @@ async function refresh() {
 					}
 				]
 			};
-		} else {
+		}
+		// Deep: ein Begriff, drei Metriken gleichzeitig
+		else {
 			const url = `series_deep.php?query_id=${encodeURIComponent(qa)}&days=${encodeURIComponent(days)}`;
 			const res = await fetch(url);
 			const js = await res.json();
@@ -499,21 +612,27 @@ async function refresh() {
 				]
 			};
 		}
+
 		buildChart(seriesData);
 
+		// Tabelle: im Trendmodus zeigen wir alle Videos zum Begriff A im Zeitraum
 		const tableUrl = `table.php?query_id=${encodeURIComponent(qa)}&days=${encodeURIComponent(days)}`;
 		const tableRes = await fetch(tableUrl);
 		rows = await tableRes.json();
-	} else {
+	}
+
+	// -------------------- Top-Videos --------------------
+	else {
+		// Wir laden alle Rows und schneiden Top-10 ab
 		const tableUrl = `table.php?query_id=${encodeURIComponent(qa)}&days=${encodeURIComponent(days)}`;
 		const tableRes = await fetch(tableUrl);
 		const allRows = await tableRes.json();
 
-		// Top 10 nach Views für Chart UND Tabelle
 		const top = allRows.slice(0, 10);
 
+		// Chart: Top-10 Balken
 		const labels = top.map(r =>
-			r.title && r.title.length > 48 ? r.title.slice(0, 45) + '…' : (r.title || '')
+			(r.title && r.title.length > 48) ? r.title.slice(0, 45) + '…' : (r.title || '')
 		);
 		const data = top.map(r => Number(r.view_count || 0));
 		const datasets = [{
@@ -521,26 +640,41 @@ async function refresh() {
 			data,
 			tension: 0.3
 		}];
+
 		buildTopChart({
 			labels,
 			datasets
 		});
 
-		// Tabelle im Top-Modus nur mit Top 10 befüllen
+		// Tabelle: nur Top-10
 		rows = top;
 	}
 
+	// Tabellenüberschrift aktualisieren
+	if (tblTerm) tblTerm.textContent = qaText;
 
-	if (tblTerm) {
-		tblTerm.textContent = qaText;
-	}
+	// Tabelle rendern
 	renderTable(rows);
 }
 
-// EVENT BINDINGS
+// =========================================================================
+// 9) Event-Handling (UI reagieren lassen)
+// =========================================================================
+
+/**
+ * Bindet Event-Listener an UI-Controls.
+ * WICHTIG: mode + viewMode rufen erst updateControlVisibility() auf.
+ */
 function bindEvents() {
-	if (modeEl) modeEl.addEventListener('change', refresh);
-	if (viewModeEl) viewModeEl.addEventListener('change', refresh);
+	if (modeEl) modeEl.addEventListener('change', () => {
+		updateControlVisibility();
+		refresh();
+	});
+	if (viewModeEl) viewModeEl.addEventListener('change', () => {
+		updateControlVisibility();
+		refresh();
+	});
+
 	if (daysEl) daysEl.addEventListener('change', refresh);
 	if (metricEl) metricEl.addEventListener('change', refresh);
 	if (qaEl) qaEl.addEventListener('change', refresh);
@@ -548,20 +682,33 @@ function bindEvents() {
 	if (reloadBtn) reloadBtn.addEventListener('click', refresh);
 }
 
-// INITIALIZE
+// =========================================================================
+// 10) Initialisierung beim Laden der Seite
+// =========================================================================
+
 window.addEventListener('load', async () => {
 	initThemeToggle();
 	initVideoModal();
+
+	// Begriffe laden und Dropdowns befüllen
 	await loadQueries();
+
+	// Events registrieren
 	bindEvents();
+
+	// Controls passend ein-/ausblenden (z.B. beim ersten Laden)
+	updateControlVisibility();
+
+	// Sortierung aktivieren
 	initTableSorting();
+
+	// Erste Daten laden
 	await refresh();
 
+	// Bei Resize nicht permanent refreshen, sondern „debounced“
 	let resizeTimeout;
 	window.addEventListener('resize', () => {
 		clearTimeout(resizeTimeout);
-		resizeTimeout = setTimeout(() => {
-			refresh();
-		}, 300);
+		resizeTimeout = setTimeout(refresh, 300);
 	});
 });
