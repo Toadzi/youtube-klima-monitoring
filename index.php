@@ -51,6 +51,9 @@
 						<option value="trend" selected>Zeitverlauf</option>
 						<option value="top">Top-Videos</option>
 					</select>
+					<div id="viewModeHint" class="form-text ykm-formhint d-none">
+						Top-Videos basiert immer auf <strong>Begriff A</strong>. Modus, Begriff B und Metrik sind dafür deaktiviert.
+					</div>
 				</div>
 				<div class="col-6 col-md-2">
 					<label for="days" class="form-label">Zeitraum</label>
@@ -88,6 +91,11 @@
 
 				<h5 class="card-title mb-0" id="chartTitle">Zeitverlauf</h5>
 				<p class="text-muted small mb-3" id="chartSubtitle">letzte 30 Tage</p>
+				
+				<div id="insightBox" class="ykm-insight mt-2 mb-3" role="note" aria-live="polite">
+					<div class="ykm-insight-title">Kurz-Insight</div>
+  					<div id="insightText" class="ykm-insight-text">–</div>
+				</div>
 
 				<div class="chart-box">
 					<canvas id="chart"></canvas>
