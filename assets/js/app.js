@@ -35,6 +35,8 @@ const tblTerm = document.getElementById('tblTerm'); // Anzeige des aktuellen Beg
 const tbody = document.getElementById('tbody'); // Tabellen-Body
 const chartTitleEl = document.getElementById('chartTitle'); // dynamischer Chart-Titel
 const chartSubtitleEl = document.getElementById('chartSubtitle'); // dynamischer Chart-Untertitel
+const viewModeHintEl = document.getElementById('viewModeHint');
+const insightTextEl = document.getElementById('insightText');
 
 // =========================================================================
 // 1) THEME (Dark Mode)
@@ -287,24 +289,37 @@ function buildTopChart(data) {
  *    - Deep-Dive: versteckt B + Metrik
  */
 function updateControlVisibility() {
-	const viewMode = viewModeEl?.value || 'trend';
-	const duel = modeEl?.value === 'duel';
+  const viewMode = viewModeEl?.value || 'trend';
+  const duel = modeEl?.value === 'duel';
 
-	if (viewMode === 'top') {
-		// Top-Videos: wir arbeiten nur mit Begriff A (Ranking nach Views)
-		if (modeEl) {
-			// wir setzen einen konsistenten Wert und sperren das Feld
-			modeEl.value = 'deep';
-			modeEl.disabled = true;
-		}
-		if (qbWrap) qbWrap.style.display = 'none';
-		if (metricWrap) metricWrap.style.display = 'none';
-	} else {
-		// Zeitverlauf
-		if (modeEl) modeEl.disabled = false;
-		if (qbWrap) qbWrap.style.display = duel ? '' : 'none';
-		if (metricWrap) metricWrap.style.display = duel ? '' : 'none';
-	}
+  // Hint ein-/ausblenden
+  if (viewModeHintEl) {
+    viewModeHintEl.classList.toggle('d-none', viewMode !== 'top');
+  }
+
+  if (viewMode === 'top') {
+    // Top-Videos: nur Begriff A
+    if (modeEl) {
+      modeEl.value = 'deep';     // konsistenter interner Zustand
+      modeEl.disabled = true;
+    }
+
+    if (qbWrap) qbWrap.style.display = 'none';
+    if (qbEl) qbEl.disabled = true;
+
+    if (metricWrap) metricWrap.style.display = 'none';
+    if (metricEl) metricEl.disabled = true;
+  } else {
+    // Zeitverlauf
+    if (modeEl) modeEl.disabled = false;
+
+    // B & Metrik nur im Duel
+    if (qbWrap) qbWrap.style.display = duel ? '' : 'none';
+    if (qbEl) qbEl.disabled = !duel;
+
+    if (metricWrap) metricWrap.style.display = duel ? '' : 'none';
+    if (metricEl) metricEl.disabled = !duel;
+  }
 }
 
 // =========================================================================
@@ -337,6 +352,125 @@ function updateChartTitle(viewMode, duel, metric, qaText, qbText, days) {
 		chartTitleEl.textContent = `Top-Videos: ${qaText}`;
 		chartSubtitleEl.textContent = `Basis: Views, ${daysLabel}`;
 	}
+}
+
+// -------------------- INSIGHTS --------------------
+
+// Zahl formatieren (de-DE)
+function fmt(n) {
+  if (n == null || !isFinite(n)) return '0';
+  return Number(n).toLocaleString('de-DE');
+}
+
+// Prozent formatieren
+function fmtPct(p) {
+  if (p == null || !isFinite(p)) return '0%';
+  return `${Math.round(p)}%`;
+}
+
+// Sicherstellen, dass wir mit Zahlen arbeiten
+function toNum(v) {
+  const n = Number(v);
+  return isFinite(n) ? n : 0;
+}
+
+// Größten Peak finden (Label + Wert)
+function findPeak(labels, values) {
+  let maxVal = -Infinity;
+  let maxIdx = -1;
+  values.forEach((v, i) => {
+    const n = toNum(v);
+    if (n > maxVal) {
+      maxVal = n;
+      maxIdx = i;
+    }
+  });
+  return { label: labels[maxIdx] ?? '', value: maxVal };
+}
+
+// Größten Tagesanstieg finden (Label des Zieltags + delta)
+function findMaxIncrease(labels, values) {
+  let bestDelta = -Infinity;
+  let bestIdx = -1; // idx des Tages, an dem der Sprung sichtbar wird (i)
+  for (let i = 1; i < values.length; i++) {
+    const delta = toNum(values[i]) - toNum(values[i - 1]);
+    if (delta > bestDelta) {
+      bestDelta = delta;
+      bestIdx = i;
+    }
+  }
+  return { label: labels[bestIdx] ?? '', delta: bestDelta };
+}
+
+// Insight-Text setzen
+function setInsight(text) {
+  if (!insightTextEl) return;
+  insightTextEl.textContent = text || '–';
+}
+
+/**
+ * Insights für Duel-Trend:
+ * - Summe A vs B und prozentualer Abstand
+ * - Peak-Tag (A)
+ * - größter Anstieg (A)
+ */
+function insightDuelTrend({ labels, aValues, bValues, qaText, qbText, metricLabel, days }) {
+  const sumA = aValues.reduce((acc, v) => acc + toNum(v), 0);
+  const sumB = bValues.reduce((acc, v) => acc + toNum(v), 0);
+
+  // Abstand in % (bezogen auf B)
+  const pct = sumB === 0 ? null : ((sumA - sumB) / sumB) * 100;
+
+  const peakA = findPeak(labels, aValues);
+  const incA = findMaxIncrease(labels, aValues);
+
+  const leadText =
+    pct == null
+      ? `${qaText} liegt im Zeitraum der letzten ${days} Tage vor ${qbText} (B hatte kaum/keine Werte).`
+      : (sumA >= sumB
+          ? `${qaText} erzielt in den letzten ${days} Tagen rund ${fmtPct(pct)} mehr ${metricLabel} als ${qbText}.`
+          : `${qaText} erzielt in den letzten ${days} Tagen rund ${fmtPct(-pct)} weniger ${metricLabel} als ${qbText}.`);
+
+  const peakText = peakA.label
+    ? `Peak bei ${qaText}: ${fmt(peakA.value)} am ${peakA.label}.`
+    : '';
+
+  const incText = (incA.label && isFinite(incA.delta))
+    ? `Stärkster Tagesanstieg bei ${qaText}: +${fmt(incA.delta)} am ${incA.label}.`
+    : '';
+
+  return [leadText, peakText, incText].filter(Boolean).join(' ');
+}
+
+/**
+ * Insights für Deep-Trend:
+ * - Peak-Tag (Views)
+ * - größter Anstieg (Views)
+ * - Verhältnis Likes/Views (grob) über den Zeitraum
+ */
+function insightDeepTrend({ labels, views, likes, qaText, days }) {
+  const peak = findPeak(labels, views);
+  const inc = findMaxIncrease(labels, views);
+
+  const sumViews = views.reduce((a, v) => a + toNum(v), 0);
+  const sumLikes = likes.reduce((a, v) => a + toNum(v), 0);
+  const ratio = sumViews === 0 ? null : (sumLikes / sumViews) * 100;
+
+  const peakText = peak.label
+    ? `Peak bei Views: ${fmt(peak.value)} am ${peak.label}.`
+    : '';
+
+  const incText = (inc.label && isFinite(inc.delta))
+    ? `Stärkster Tagesanstieg: +${fmt(inc.delta)} Views am ${inc.label}.`
+    : '';
+
+  const ratioText = ratio == null
+    ? ''
+    : `Likes-Rate über ${days} Tage: ca. ${ratio.toFixed(2)}%.`;
+
+  const lead = `Deep-Dive zu „${qaText}“ (letzte ${days} Tage).`;
+
+  return [lead, peakText, incText, ratioText].filter(Boolean).join(' ');
 }
 
 // =========================================================================
@@ -520,141 +654,186 @@ async function loadQueries() {
  * 4) Alles rendern
  */
 async function refresh() {
-	if (!qaEl || qaEl.value === '') return;
+  if (!qaEl || qaEl.value === '') return;
 
-	// Wichtig: zuerst UI-Zustand setzen, damit danach korrekt gelesen wird
-	updateControlVisibility();
+  // Wichtig: zuerst UI-Zustand setzen, damit danach korrekt gelesen wird
+  updateControlVisibility();
 
-	// Zustand nach möglichen Auto-Anpassungen erneut lesen
-	const duel = modeEl?.value === 'duel';
-	const viewMode = viewModeEl?.value || 'trend';
+  // Zustand nach möglichen Auto-Anpassungen erneut lesen
+  const duel = modeEl?.value === 'duel';
+  const viewMode = viewModeEl?.value || 'trend';
 
-	const days = daysEl.value;
-	const qa = qaEl.value;
-	const qb = qbEl.value;
-	const metric = metricEl.value;
+  const days = daysEl.value;
+  const qa = qaEl.value;
+  const qb = qbEl.value;
+  const metric = metricEl.value;
 
-	const qaText = qaEl.options[qaEl.selectedIndex].text;
-	const qbText = qbEl.options[qbEl.selectedIndex] ? qbEl.options[qbEl.selectedIndex].text : '';
+  const qaText = qaEl.options[qaEl.selectedIndex].text;
+  const qbText = qbEl.options[qbEl.selectedIndex]
+    ? qbEl.options[qbEl.selectedIndex].text
+    : '';
 
-	// Titel anpassen
-	updateChartTitle(viewMode, duel, metric, qaText, qbText, days);
+  // Titel anpassen
+  updateChartTitle(viewMode, duel, metric, qaText, qbText, days);
 
-	let rows = [];
+  let rows = [];
 
-	// -------------------- Trend / Zeitverlauf --------------------
-	if (viewMode === 'trend') {
-		let seriesData;
+  // ==================== Trend / Zeitverlauf ====================
+  if (viewMode === 'trend') {
+    let seriesData;
 
-		// Duel: zwei Begriffe + eine Metrik
-		if (duel) {
-			const url =
-				`series_compare.php?query_id_a=${encodeURIComponent(qa)}` +
-				`&query_id_b=${encodeURIComponent(qb)}` +
-				`&metric=${encodeURIComponent(metric)}` +
-				`&days=${encodeURIComponent(days)}`;
+    // -------- Duel: zwei Begriffe + eine Metrik --------
+    if (duel) {
+      const url =
+        `series_compare.php?query_id_a=${encodeURIComponent(qa)}` +
+        `&query_id_b=${encodeURIComponent(qb)}` +
+        `&metric=${encodeURIComponent(metric)}` +
+        `&days=${encodeURIComponent(days)}`;
 
-			const res = await fetch(url);
-			const js = await res.json();
+      const res = await fetch(url);
+      const js = await res.json();
 
-			// Datumsliste zusammenführen (damit A und B auf gleicher X-Achse liegen)
-			const labels = Array.from(new Set([...js.a.map(r => r.d), ...js.b.map(r => r.d)])).sort();
+      // Einheitliche X-Achse
+      const labels = Array.from(
+        new Set([...js.a.map(r => r.d), ...js.b.map(r => r.d)])
+      ).sort();
 
-			// Map bauen (Datum -> Wert)
-			const mapA = {};
-			js.a.forEach(r => {
-				mapA[r.d] = Number(r.val) || 0;
-			});
+      const mapA = {};
+      js.a.forEach(r => { mapA[r.d] = Number(r.val) || 0; });
 
-			const mapB = {};
-			js.b.forEach(r => {
-				mapB[r.d] = Number(r.val) || 0;
-			});
+      const mapB = {};
+      js.b.forEach(r => { mapB[r.d] = Number(r.val) || 0; });
 
-			seriesData = {
-				labels,
-				datasets: [{
-						label: qaText,
-						data: labels.map(d => mapA[d] || 0),
-						tension: 0.3
-					},
-					{
-						label: qbText,
-						data: labels.map(d => mapB[d] || 0),
-						tension: 0.3
-					}
-				]
-			};
-		}
-		// Deep: ein Begriff, drei Metriken gleichzeitig
-		else {
-			const url = `series_deep.php?query_id=${encodeURIComponent(qa)}&days=${encodeURIComponent(days)}`;
-			const res = await fetch(url);
-			const js = await res.json();
+      seriesData = {
+        labels,
+        datasets: [
+          {
+            label: qaText,
+            data: labels.map(d => mapA[d] || 0),
+            tension: 0.3
+          },
+          {
+            label: qbText,
+            data: labels.map(d => mapB[d] || 0),
+            tension: 0.3
+          }
+        ]
+      };
 
-			seriesData = {
-				labels: js.map(r => r.d),
-				datasets: [{
-						label: 'Views',
-						data: js.map(r => Number(r.views) || 0),
-						tension: 0.3
-					},
-					{
-						label: 'Likes',
-						data: js.map(r => Number(r.likes) || 0),
-						tension: 0.3
-					},
-					{
-						label: 'Kommentare',
-						data: js.map(r => Number(r.comments) || 0),
-						tension: 0.3
-					}
-				]
-			};
-		}
+      // 🔍 INSIGHT: Duel-Trend
+      const metricLabels = {
+        view_count: 'Views',
+        like_count: 'Likes',
+        comment_count: 'Kommentare'
+      };
 
-		buildChart(seriesData);
+      const insight = insightDuelTrend({
+        labels,
+        aValues: seriesData.datasets[0].data,
+        bValues: seriesData.datasets[1].data,
+        qaText,
+        qbText,
+        metricLabel: metricLabels[metric] || 'Views',
+        days
+      });
 
-		// Tabelle: im Trendmodus zeigen wir alle Videos zum Begriff A im Zeitraum
-		const tableUrl = `table.php?query_id=${encodeURIComponent(qa)}&days=${encodeURIComponent(days)}`;
-		const tableRes = await fetch(tableUrl);
-		rows = await tableRes.json();
-	}
+      setInsight(insight);
+    }
 
-	// -------------------- Top-Videos --------------------
-	else {
-		// Wir laden alle Rows und schneiden Top-10 ab
-		const tableUrl = `table.php?query_id=${encodeURIComponent(qa)}&days=${encodeURIComponent(days)}`;
-		const tableRes = await fetch(tableUrl);
-		const allRows = await tableRes.json();
+    // -------- Deep-Dive: ein Begriff, drei Metriken --------
+    else {
+      const url =
+        `series_deep.php?query_id=${encodeURIComponent(qa)}` +
+        `&days=${encodeURIComponent(days)}`;
 
-		const top = allRows.slice(0, 10);
+      const res = await fetch(url);
+      const js = await res.json();
 
-		// Chart: Top-10 Balken
-		const labels = top.map(r =>
-			(r.title && r.title.length > 48) ? r.title.slice(0, 45) + '…' : (r.title || '')
-		);
-		const data = top.map(r => Number(r.view_count || 0));
-		const datasets = [{
-			label: 'Views (Top 10)',
-			data,
-			tension: 0.3
-		}];
+      seriesData = {
+        labels: js.map(r => r.d),
+        datasets: [
+          {
+            label: 'Views',
+            data: js.map(r => Number(r.views) || 0),
+            tension: 0.3
+          },
+          {
+            label: 'Likes',
+            data: js.map(r => Number(r.likes) || 0),
+            tension: 0.3
+          },
+          {
+            label: 'Kommentare',
+            data: js.map(r => Number(r.comments) || 0),
+            tension: 0.3
+          }
+        ]
+      };
 
-		buildTopChart({
-			labels,
-			datasets
-		});
+      // 🔍 INSIGHT: Deep-Dive
+      const insight = insightDeepTrend({
+        labels: seriesData.labels,
+        views: seriesData.datasets[0].data,
+        likes: seriesData.datasets[1].data,
+        qaText,
+        days
+      });
 
-		// Tabelle: nur Top-10
-		rows = top;
-	}
+      setInsight(insight);
+    }
 
-	// Tabellenüberschrift aktualisieren
-	if (tblTerm) tblTerm.textContent = qaText;
+    buildChart(seriesData);
 
-	// Tabelle rendern
-	renderTable(rows);
+    // Tabelle: alle Videos zu Begriff A im Zeitraum
+    const tableUrl =
+      `table.php?query_id=${encodeURIComponent(qa)}` +
+      `&days=${encodeURIComponent(days)}`;
+    const tableRes = await fetch(tableUrl);
+    rows = await tableRes.json();
+  }
+
+  // ==================== Top-Videos ====================
+  else {
+    const tableUrl =
+      `table.php?query_id=${encodeURIComponent(qa)}` +
+      `&days=${encodeURIComponent(days)}`;
+
+    const tableRes = await fetch(tableUrl);
+    const allRows = await tableRes.json();
+
+    const top = allRows.slice(0, 10);
+
+    const labels = top.map(r =>
+      r.title && r.title.length > 48
+        ? r.title.slice(0, 45) + '…'
+        : (r.title || '')
+    );
+
+    const data = top.map(r => Number(r.view_count || 0));
+
+    buildTopChart({
+      labels,
+      datasets: [{
+        label: 'Views (Top 10)',
+        data,
+        tension: 0.3
+      }]
+    });
+
+    // 🔍 INSIGHT: Top-Videos
+    setInsight(
+      `Top-10-Videos zu „${qaText}“ im Zeitraum der letzten ${days} Tage. ` +
+      `Ranking und Balkendiagramm basieren ausschließlich auf Views.`
+    );
+
+    rows = top;
+  }
+
+  // Tabellenüberschrift
+  if (tblTerm) tblTerm.textContent = qaText;
+
+  // Tabelle rendern
+  renderTable(rows);
 }
 
 // =========================================================================
