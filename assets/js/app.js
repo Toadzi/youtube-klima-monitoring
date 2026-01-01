@@ -17,6 +17,7 @@ let sortState = {
 	key: 'views',
 	dir: 'desc'
 }; // aktuelle Sortierung
+let activeHelpPopover = null;
 const THEME_KEY = 'ykm-theme'; // LocalStorage-Key für Dark Mode
 
 // -------------------------------------------------------------------------
@@ -37,6 +38,125 @@ const chartTitleEl = document.getElementById('chartTitle'); // dynamischer Chart
 const chartSubtitleEl = document.getElementById('chartSubtitle'); // dynamischer Chart-Untertitel
 const viewModeHintEl = document.getElementById('viewModeHint');
 const insightTextEl = document.getElementById('insightText');
+
+// -------------------- HELP SYSTEM (central) --------------------
+// Key = id des Formular-Controls (select/input/button), z.B. "viewMode"
+const HELP = {
+  viewMode: {
+    title: 'Ansicht',
+    html: `
+      <div><strong>Zeitverlauf</strong>: zeigt die Entwicklung über Tage (Trend).</div>
+      <div class="mt-1"><strong>Top-Videos</strong>: zeigt die Top 10 zu <strong>Begriff A</strong> (Ranking nach Views).</div>
+      <div class="mt-1 text-muted">Hinweis: In Top-Videos sind Modus, Begriff B und Metrik deaktiviert.</div>
+    `
+  },
+  mode: {
+    title: 'Modus',
+    html: `
+      <div><strong>Duel</strong>: 2 Begriffe werden für <em>eine</em> Metrik verglichen.</div>
+      <div class="mt-1"><strong>Deep-Dive</strong>: 1 Begriff, dafür Views/Likes/Kommentare gleichzeitig.</div>
+    `
+  },
+  metric: {
+    title: 'Metrik',
+    html: `
+      <div>Nur relevant im <strong>Duel</strong>-Modus (Trend).</div>
+      <div class="mt-1">Wähle, ob Views, Likes oder Kommentare verglichen werden sollen.</div>
+    `
+  },
+  days: {
+    title: 'Zeitraum',
+    html: `
+      <div>Filtert die Anzeige auf die letzten 7/14/30 Tage.</div>
+      <div class="mt-1 text-muted">Je kürzer der Zeitraum, desto „spitzer“ werden Peaks sichtbar.</div>
+    `
+  },
+  qa: {
+    title: 'Begriff A',
+    html: `
+      <div>Primärer Suchbegriff.</div>
+      <div class="mt-1">In <strong>Top-Videos</strong> basiert alles ausschließlich auf Begriff A.</div>
+    `
+  },
+  qb: {
+    title: 'Begriff B',
+    html: `
+      <div>Vergleichsbegriff – nur aktiv im <strong>Duel</strong>-Modus (Trend).</div>
+    `
+  },
+  reload: {
+    title: 'Anzeigen',
+    html: `
+      <div>Lädt die Daten neu und aktualisiert Chart + Tabelle.</div>
+    `
+  }
+};
+
+// =========================================================================
+// 0) Helper, der Icons automatisch neben Labels einfügt
+// =========================================================================
+
+function initHelpSystem() {
+  if (!window.bootstrap) return;
+
+  // 1) Für jedes Label[for] prüfen: gibt es dazu eine HELP-Definition?
+  document.querySelectorAll('label.form-label[for]').forEach((label) => {
+    const targetId = label.getAttribute('for');
+    if (!targetId) return;
+
+    const def = HELP[targetId];
+    if (!def) return;
+
+    // doppelt verhindern
+    if (label.dataset.helpBound === '1') return;
+    label.dataset.helpBound = '1';
+
+    // Label in eine Row verpacken (flex) und Info-Button anfügen
+    const row = document.createElement('div');
+    row.className = 'ykm-labelrow';
+
+    // Label aus DOM lösen und in row packen
+    const parent = label.parentElement;
+    parent.insertBefore(row, label);
+    row.appendChild(label);
+
+    // Info Button erstellen
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ykm-help-btn';
+    btn.setAttribute('data-bs-toggle', 'popover');
+    btn.setAttribute('data-bs-placement', 'top');
+    btn.setAttribute('data-bs-trigger', 'hover focus click');
+    btn.setAttribute('data-bs-html', 'true');
+    btn.setAttribute('data-bs-title', def.title || 'Info');
+    btn.setAttribute('data-bs-content', def.html || '');
+
+    btn.innerHTML = `
+      <span class="ykm-help-dot" aria-hidden="true">i</span>
+      <span class="visually-hidden">Info</span>
+    `;
+
+    row.appendChild(btn);
+
+    // Popover aktivieren
+	const pop = new bootstrap.Popover(btn);
+
+	// merken, welcher Popover aktiv ist
+	btn.addEventListener('shown.bs.popover', () => {
+		if (activeHelpPopover && activeHelpPopover !== pop) {
+			activeHelpPopover.hide();
+		}
+		activeHelpPopover = pop;
+	});
+
+	// beim Schließen zurücksetzen
+	btn.addEventListener('hidden.bs.popover', () => {
+		if (activeHelpPopover === pop) {
+			activeHelpPopover = null;
+		}
+	});
+  });
+}
 
 // =========================================================================
 // 1) THEME (Dark Mode)
@@ -720,7 +840,7 @@ async function refresh() {
         ]
       };
 
-      // 🔍 INSIGHT: Duel-Trend
+      // INSIGHT: Duel-Trend
       const metricLabels = {
         view_count: 'Views',
         like_count: 'Likes',
@@ -770,7 +890,7 @@ async function refresh() {
         ]
       };
 
-      // 🔍 INSIGHT: Deep-Dive
+      // INSIGHT: Deep-Dive
       const insight = insightDeepTrend({
         labels: seriesData.labels,
         views: seriesData.datasets[0].data,
@@ -820,7 +940,7 @@ async function refresh() {
       }]
     });
 
-    // 🔍 INSIGHT: Top-Videos
+    // INSIGHT: Top-Videos
     setInsight(
       `Top-10-Videos zu „${qaText}“ im Zeitraum der letzten ${days} Tage. ` +
       `Ranking und Balkendiagramm basieren ausschließlich auf Views.`
@@ -867,6 +987,7 @@ function bindEvents() {
 
 window.addEventListener('load', async () => {
 	initThemeToggle();
+	initHelpSystem();
 	initVideoModal();
 
 	// Begriffe laden und Dropdowns befüllen
@@ -890,4 +1011,22 @@ window.addEventListener('load', async () => {
 		clearTimeout(resizeTimeout);
 		resizeTimeout = setTimeout(refresh, 300);
 	});
+});
+
+// Popover schließen, wenn außerhalb geklickt wird
+document.addEventListener('click', (ev) => {
+  if (!activeHelpPopover) return;
+
+  const popoverEl = document.querySelector('.popover');
+  const triggerEl = ev.target.closest('.ykm-help-btn');
+
+  // Klick auf das aktive Info-Icon → nicht schließen (Bootstrap regelt Toggle)
+  if (triggerEl) return;
+
+  // Klick innerhalb des Popovers → nicht schließen
+  if (popoverEl && popoverEl.contains(ev.target)) return;
+
+  // sonst: schließen
+  activeHelpPopover.hide();
+  activeHelpPopover = null;
 });
