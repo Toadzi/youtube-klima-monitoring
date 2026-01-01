@@ -367,3 +367,61 @@ th[data-sort]:hover {
 .dark-theme .ykm-formhint{
   background: color-mix(in oklab, var(--card), var(--accent-2) 10%);
 }
+
+/* =========================================================
+   Help System (Info-Icons + Popover)
+   ========================================================= */
+
+.ykm-labelrow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.5rem;
+}
+
+.ykm-help-btn{
+  border:0;
+  background:transparent;
+  padding:0;
+  line-height:1;
+  text-decoration:none;
+  cursor:pointer;
+}
+
+.ykm-help-dot{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: color-mix(in oklab, var(--card), var(--accent-2) 8%);
+  color: var(--fg);
+  font-size:12px;
+  font-weight:800;
+}
+
+.ykm-help-btn:hover .ykm-help-dot{
+  background: color-mix(in oklab, var(--card), var(--accent-2) 14%);
+}
+
+.dark-theme .ykm-help-dot{
+  background: color-mix(in oklab, var(--card), var(--accent-2) 12%);
+}
+
+/* Popover Dark Mode (Bootstrap) */
+.dark-theme .popover{
+  --bs-popover-bg: var(--card);
+  --bs-popover-border-color: var(--border);
+  --bs-popover-header-bg: var(--card);
+  --bs-popover-header-color: var(--fg);
+  --bs-popover-body-color: var(--fg);
+  box-shadow: var(--shadow);
+}
+
+.dark-theme .popover .popover-arrow::before,
+.dark-theme .popover .popover-arrow::after{
+  border-top-color: var(--card) !important;
+  border-bottom-color: var(--card) !important;
+}
