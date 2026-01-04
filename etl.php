@@ -14,25 +14,50 @@
 
 require_once __DIR__ . '/config.php';
 
+/**
+ * Robuste Ausgabe für CLI UND Web-SAPI:
+ * - CLI: in stdout/stderr
+ * - Web/FPM/CGI: echo (mit <br>)
+ */
+function out(string $msg): void {
+    if (PHP_SAPI === 'cli') {
+        file_put_contents('php://stdout', $msg);
+    } else {
+        // In Cron-Web-SAPI ist HTML ok, damit DF die Ausgabe loggt/anzeigt
+        echo htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "<br>\n";
+    }
+}
+
+function err(string $msg): void {
+    if (PHP_SAPI === 'cli') {
+        file_put_contents('php://stderr', $msg);
+    } else {
+        // Fehlermeldungen als sichtbarer Text (und ggf. rot markiert)
+        echo '<span style="color:#b91c1c;">' .
+            htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') .
+            "</span><br>\n";
+    }
+}
+
 try {
     $pdo = new PDO(DB_DSN, DB_USER, DB_PASS, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 } catch (PDOException $e) {
-    fwrite(STDERR, "DB-Verbindung fehlgeschlagen: " . $e->getMessage() . "\n");
+    err("DB-Verbindung fehlgeschlagen: " . $e->getMessage() . "\n");
     exit(1);
 }
 
 if (empty(YT_API_KEY) || YT_API_KEY === 'HIER_DEIN_API_KEY') {
-    fwrite(STDERR, "Bitte hinterlegen Sie Ihren YT_API_KEY in config.php.\n");
+    err("Bitte hinterlegen Sie Ihren YT_API_KEY in config.php.\n");
     exit(1);
 }
 
 // Alle Suchbegriffe abrufen
 $queries = $pdo->query('SELECT id, term FROM queries')->fetchAll();
 if (!$queries) {
-    fwrite(STDERR, "Keine Suchbegriffe gefunden.\n");
+    err("Keine Suchbegriffe gefunden.\n");
     exit(0);
 }
 
@@ -57,10 +82,24 @@ function fetch_json($url) {
 $today = date('Y-m-d');
 
 // Prepared Statements für Insert/Upsert
-$insertVideoStmt = $pdo->prepare("INSERT INTO videos (video_id, query_id, channel_id, title, published_at, language) VALUES (:video_id,:query_id,:channel_id,:title,:published_at,:language)
-    ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id), title = VALUES(title), published_at = VALUES(published_at), language = VALUES(language)");
-$insertStatsStmt = $pdo->prepare("INSERT INTO video_stats_daily (video_id, stat_date, view_count, like_count, comment_count) VALUES (:video_id,:stat_date,:view_count,:like_count,:comment_count)
-    ON DUPLICATE KEY UPDATE view_count = VALUES(view_count), like_count = VALUES(like_count), comment_count = VALUES(comment_count)");
+$insertVideoStmt = $pdo->prepare("
+    INSERT INTO videos (video_id, query_id, channel_id, title, published_at, language)
+    VALUES (:video_id,:query_id,:channel_id,:title,:published_at,:language)
+    ON DUPLICATE KEY UPDATE
+        channel_id = VALUES(channel_id),
+        title = VALUES(title),
+        published_at = VALUES(published_at),
+        language = VALUES(language)
+");
+
+$insertStatsStmt = $pdo->prepare("
+    INSERT INTO video_stats_daily (video_id, stat_date, view_count, like_count, comment_count)
+    VALUES (:video_id,:stat_date,:view_count,:like_count,:comment_count)
+    ON DUPLICATE KEY UPDATE
+        view_count = VALUES(view_count),
+        like_count = VALUES(like_count),
+        comment_count = VALUES(comment_count)
+");
 
 $totalVideos = 0;
 
@@ -69,12 +108,17 @@ foreach ($queries as $q) {
     $term    = $q['term'];
 
     // 1. Suche nach neuen Videos zum Suchbegriff
-    $searchUrl = 'https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&type=video&order=date&q=' . urlencode($term) . '&key=' . urlencode(YT_API_KEY);
+    $searchUrl = 'https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&type=video&order=date&q='
+        . urlencode($term)
+        . '&key=' . urlencode(YT_API_KEY);
+
     $searchResult = fetch_json($searchUrl);
+
     if (!isset($searchResult['items'])) {
-        fwrite(STDERR, "Fehler bei der Suche für '$term'.\n");
+        err("Fehler bei der Suche für '$term'.\n");
         continue;
     }
+
     // Video-IDs sammeln
     $videoIds = [];
     foreach ($searchResult['items'] as $item) {
@@ -82,50 +126,69 @@ foreach ($queries as $q) {
             $videoIds[] = $item['id']['videoId'];
         }
     }
+
     $videoIds = array_values(array_unique($videoIds));
-    if (empty($videoIds)) continue;
+    if (empty($videoIds)) {
+        // Kein Output nötig, aber könnte man loggen
+        continue;
+    }
 
     // 2. Details & Statistiken abrufen
     $batchSize = 50;
     for ($i = 0; $i < count($videoIds); $i += $batchSize) {
         $batch = array_slice($videoIds, $i, $batchSize);
-        $videosUrl = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=' . implode(',', $batch) . '&key=' . urlencode(YT_API_KEY);
+
+        $videosUrl = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id='
+            . implode(',', $batch)
+            . '&key=' . urlencode(YT_API_KEY);
+
         $videosResult = fetch_json($videosUrl);
-        if (!isset($videosResult['items'])) continue;
+        if (!isset($videosResult['items'])) {
+            continue;
+        }
+
         foreach ($videosResult['items'] as $v) {
             $vid = $v['id'] ?? null;
             $snippet = $v['snippet'] ?? [];
             $statistics = $v['statistics'] ?? [];
             if (!$vid) continue;
+
             // Felder extrahieren
             $channelId   = $snippet['channelId'] ?? '';
             $title       = mb_substr($snippet['title'] ?? '', 0, 255);
-            $publishedAt = isset($snippet['publishedAt']) ? date('Y-m-d H:i:s', strtotime($snippet['publishedAt'])) : null;
+            $publishedAt = isset($snippet['publishedAt'])
+                ? date('Y-m-d H:i:s', strtotime($snippet['publishedAt']))
+                : null;
+
             $language    = $snippet['defaultAudioLanguage'] ?? ($snippet['defaultLanguage'] ?? null);
-            $viewCount   = isset($statistics['viewCount'])   ? (int)$statistics['viewCount']   : null;
-            $likeCount   = isset($statistics['likeCount'])   ? (int)$statistics['likeCount']   : null;
-            $commentCount= isset($statistics['commentCount'])? (int)$statistics['commentCount']: null;
+
+            $viewCount    = isset($statistics['viewCount'])    ? (int)$statistics['viewCount']    : null;
+            $likeCount    = isset($statistics['likeCount'])    ? (int)$statistics['likeCount']    : null;
+            $commentCount = isset($statistics['commentCount']) ? (int)$statistics['commentCount'] : null;
 
             // In DB eintragen
             $insertVideoStmt->execute([
-                ':video_id'    => $vid,
-                ':query_id'    => $queryId,
-                ':channel_id'  => $channelId,
-                ':title'       => $title,
-                ':published_at'=> $publishedAt,
-                ':language'    => $language,
+                ':video_id'     => $vid,
+                ':query_id'     => $queryId,
+                ':channel_id'   => $channelId,
+                ':title'        => $title,
+                ':published_at' => $publishedAt,
+                ':language'     => $language,
             ]);
+
             $insertStatsStmt->execute([
-                ':video_id'      => $vid,
-                ':stat_date'     => $today,
-                ':view_count'    => $viewCount,
-                ':like_count'    => $likeCount,
-                ':comment_count' => $commentCount,
+                ':video_id'       => $vid,
+                ':stat_date'      => $today,
+                ':view_count'     => $viewCount,
+                ':like_count'     => $likeCount,
+                ':comment_count'  => $commentCount,
             ]);
+
             $totalVideos++;
         }
     }
-    fwrite(STDOUT, "Aktualisiert: $term → " . count($videoIds) . " Videos\n");
+
+    out("Aktualisiert: $term → " . count($videoIds) . " Videos\n");
 }
 
-fwrite(STDOUT, "Fertig. Insgesamt aktualisiert: $totalVideos Videos\n");
+out("Fertig. Insgesamt aktualisiert: $totalVideos Videos\n");
