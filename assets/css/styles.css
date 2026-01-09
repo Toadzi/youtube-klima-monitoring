@@ -1,0 +1,427 @@
+/* =========================================================================
+   YouTube Klima Monitoring – styles.css (bereinigte, konsistente Version)
+   - Light/Dark via CSS-Variablen
+   - Bootstrap wird gezielt überschrieben (Table, Cards, Muted)
+   - Farben an Logo angepasst (Türkis + Rot)
+   ========================================================================= */
+/* -----------------------------
+   1) Basis-Theme-Variablen
+   ----------------------------- */
+:root {
+	/* Flächen & Typo */
+	--bg: #f6f8fb;
+	/* Seitenhintergrund (neutral) */
+	--fg: #111827;
+	/* Text */
+	--muted: #6b7280;
+	/* sekundärer Text */
+	--card: #ffffff;
+	/* Karten/Flächen */
+	/* Brand */
+	--accent: #ff5b5b;
+	/* Logo-Rot */
+	--accent-2: #0fa3a4;
+	/* Logo-Türkis */
+	/* UI */
+	--border: rgba(15, 23, 42, 0.10);
+	--shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
+	--radius: 12px;
+	--radius-sm: 8px;
+	--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	/* Tabelle (Light) */
+	--tbl-head: #f2f5f9;
+	--tbl-row: #ffffff;
+	--tbl-row-alt: #fafbfd;
+	--tbl-hover: rgba(15, 23, 42, 0.04);
+}
+
+/* Dark Mode – nur Variablen überschreiben */
+.dark-theme {
+	--bg: #0b1220;
+	--fg: #e5e7eb;
+	--muted: #9ca3af;
+	--card: #0f172a;
+	--accent: #ff8ba0;
+	/* softeres Rot */
+	--accent-2: #0fa3a4;
+	--border: rgba(148, 163, 184, 0.22);
+	--shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+	/* Tabelle (Dark) */
+	--tbl-head: #111c33;
+	--tbl-row: #0f172a;
+	--tbl-row-alt: #0c1528;
+	--tbl-hover: rgba(148, 163, 184, 0.14);
+}
+
+/* -----------------------------
+   2) Global Reset / Body
+   ----------------------------- */
+* {
+	box-sizing: border-box;
+}
+
+html, body {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell;
+	background: var(--bg);
+	color: var(--fg);
+}
+
+/* Bootstrap Helper: Muted konsistent machen */
+.text-muted {
+	color: var(--muted) !important;
+}
+
+/* -----------------------------
+   3) Navbar / Branding
+   ----------------------------- */
+.ykm-navbar {
+	background: linear-gradient(90deg, #0fa3a4, #0b8690);
+	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+.dark-theme .ykm-navbar {
+	background: linear-gradient(90deg, #020617, #0f172a);
+	box-shadow: 0 18px 45px rgba(0, 0, 0, 0.7);
+}
+
+.ykm-navbar .navbar-brand {
+	color: #fff;
+	font-weight: 600;
+}
+
+.ykm-navbar .navbar-logo {
+	height: 60px;
+	width: auto;
+}
+
+/* -----------------------------
+   4) Cards / Layout
+   ----------------------------- */
+.card {
+	border-radius: 0.75rem;
+	background: var(--card);
+	border: 1px solid var(--border);
+	box-shadow: var(--shadow);
+}
+
+.dark-theme .card {
+	background: var(--card) !important;
+	border-color: var(--border) !important;
+}
+
+/* Bootstrap Card Titles sollen im Theme-Farbraum bleiben */
+.card-title {
+	color: var(--fg);
+}
+
+.dark-theme .card-title {
+	color: var(--fg) !important;
+}
+
+/* -----------------------------
+   5) Controls (Selects/Buttons)
+   ----------------------------- */
+label {
+	font-size: .85rem;
+	color: var(--muted);
+}
+
+select.form-select,
+select {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--card);
+	color: var(--fg);
+}
+
+select:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+/* Bootstrap Buttons leicht „brandig“ machen */
+.btn-primary {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+.btn-primary:hover {
+	filter: brightness(0.95);
+}
+
+.btn-outline-light {
+	border-color: rgba(255, 255, 255, 0.65);
+}
+
+/* -----------------------------
+   6) Chart Container
+   ----------------------------- */
+.chart-box {
+	position: relative;
+	width: 100%;
+	max-width: 1100px;
+	margin: 0 auto;
+	aspect-ratio: 16/6;
+}
+
+.chart-box canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+/* -----------------------------
+   7) Sortierbare Tabellen-Header
+   ----------------------------- */
+th[data-sort] {
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+	position: relative;
+	padding-right: 1.7rem;
+	/* Platz für Icon */
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+th[data-sort]::after {
+	content: "⇅";
+	position: absolute;
+	right: 0.5rem;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 0.75rem;
+	opacity: 0.45;
+}
+
+th[data-sort].sorted-asc::after {
+	content: "▲";
+	opacity: 0.9;
+}
+
+th[data-sort].sorted-desc::after {
+	content: "▼";
+	opacity: 0.9;
+}
+
+th[data-sort]:hover {
+	background-color: rgba(15, 23, 42, 0.06);
+}
+
+.dark-theme th[data-sort]:hover {
+	background-color: rgba(148, 163, 184, 0.18);
+}
+
+/* Optional: kleine visuelle Andeutung, dass es klickbar ist */
+th[data-sort]:hover {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+/* -----------------------------
+   8) Tabelle (Bootstrap Override)
+   ----------------------------- */
+/* Grundfarbe der Tabelle im Theme */
+.table {
+	color: var(--fg);
+}
+
+/* Tabellenkopf: Bootstrap table-light überschreiben */
+.table thead.table-light th,
+.table thead th {
+	background-color: var(--tbl-head);
+	color: var(--fg);
+	border-color: var(--border);
+}
+
+/* Dark Mode erzwingen (Bootstrap kann sonst drüberbügeln) */
+.dark-theme .table thead.table-light th,
+.dark-theme .table thead th {
+	background-color: var(--tbl-head) !important;
+	color: var(--fg) !important;
+	border-color: var(--border) !important;
+}
+
+.dark-theme .table.table-striped>tbody>tr:nth-of-type(odd)>* {
+	background-color: var(--tbl-row) !important;
+}
+
+/* Tabellenzeilen */
+.table tbody tr {
+	background-color: var(--tbl-row);
+}
+
+/* Bootstrap striped sauber an Theme anpassen */
+.table-striped>tbody>tr:nth-of-type(odd)>* {
+	background-color: var(--tbl-row-alt) !important;
+	color: var(--fg) !important;
+}
+
+/* Hover */
+.table tbody tr:hover>* {
+	background-color: var(--tbl-hover) !important;
+}
+
+/* Links in Tabellen */
+.table a {
+	color: var(--fg);
+}
+
+.table a:hover {
+	color: var(--accent-2);
+}
+
+/* -----------------------------
+   9) Modal (Dark Mode)
+   ----------------------------- */
+.dark-theme .modal-content {
+	background: var(--card);
+	color: var(--fg);
+	border-color: var(--border);
+}
+
+.dark-theme .modal-header,
+.dark-theme .modal-footer {
+	border-color: var(--border);
+}
+
+/* -----------------------------
+   10) Kleine Responsive Helfer
+   ----------------------------- */
+@media (max-width: 520px) {
+	.ykm-navbar .navbar-logo {
+		height: 48px;
+	}
+}
+
+/* -----------------------------
+   OVERRIDES – Dark Mode Tabellen
+   ----------------------------- */
+.dark-theme .table {
+	--bs-table-bg: var(--tbl-row);
+	--bs-table-color: var(--fg);
+	--bs-table-border-color: var(--border);
+	--bs-table-striped-bg: var(--tbl-row-alt);
+	--bs-table-striped-color: var(--fg);
+	--bs-table-hover-bg: var(--tbl-hover);
+	--bs-table-hover-color: var(--fg);
+}
+
+.dark-theme .table-striped>tbody>tr:nth-of-type(odd)>* {
+	--bs-table-bg-type: var(--tbl-row-alt) !important;
+	--bs-table-color-type: var(--fg) !important;
+	background-color: var(--tbl-row-alt) !important;
+	color: var(--fg) !important;
+}
+
+.dark-theme .table-striped>tbody>tr:nth-of-type(even)>* {
+	--bs-table-bg-type: var(--tbl-row) !important;
+	background-color: var(--tbl-row) !important;
+	color: var(--fg) !important;
+}
+
+/* Insight-Box über dem Chart */
+.ykm-insight{
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card), var(--accent-2) 6%);
+  border-radius: 12px;
+  padding: .75rem .9rem;
+}
+
+.ykm-insight-title{
+  font-weight: 700;
+  font-size: .9rem;
+  margin-bottom: .25rem;
+  color: var(--fg);
+}
+
+.ykm-insight-text{
+  color: var(--fg);
+  opacity: .92;
+  font-size: .95rem;
+  line-height: 1.45;
+}
+
+.dark-theme .ykm-insight{
+  background: color-mix(in oklab, var(--card), var(--accent-2) 10%);
+}
+
+/* UX-Hinweis unter Selects */
+.ykm-formhint{
+  margin-top: .35rem;
+  padding: .4rem .55rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card), var(--accent-2) 6%);
+  color: var(--fg);
+  font-size: .85rem;
+  line-height: 1.35;
+}
+
+.dark-theme .ykm-formhint{
+  background: color-mix(in oklab, var(--card), var(--accent-2) 10%);
+}
+
+/* =========================================================
+   Help System (Info-Icons + Popover)
+   ========================================================= */
+
+.ykm-labelrow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.5rem;
+}
+
+.ykm-help-btn{
+  border:0;
+  background:transparent;
+  padding:0;
+  line-height:1;
+  text-decoration:none;
+  cursor:pointer;
+}
+
+.ykm-help-dot{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: color-mix(in oklab, var(--card), var(--accent-2) 8%);
+  color: var(--fg);
+  font-size:12px;
+  font-weight:800;
+}
+
+.ykm-help-btn:hover .ykm-help-dot{
+  background: color-mix(in oklab, var(--card), var(--accent-2) 14%);
+}
+
+.dark-theme .ykm-help-dot{
+  background: color-mix(in oklab, var(--card), var(--accent-2) 12%);
+}
+
+/* Popover Dark Mode (Bootstrap) */
+.dark-theme .popover{
+  --bs-popover-bg: var(--card);
+  --bs-popover-border-color: var(--border);
+  --bs-popover-header-bg: var(--card);
+  --bs-popover-header-color: var(--fg);
+  --bs-popover-body-color: var(--fg);
+  box-shadow: var(--shadow);
+}
+
+.dark-theme .popover .popover-arrow::before,
+.dark-theme .popover .popover-arrow::after{
+  border-top-color: var(--card) !important;
+  border-bottom-color: var(--card) !important;
+}
